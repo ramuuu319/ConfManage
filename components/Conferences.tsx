@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Session, ScheduleGenerationParams, UserRole } from '../types';
 import { generateSchedule } from '../services/geminiService';
-import { Calendar, Clock, MapPin, User, Sparkles, Loader2, Plus, ArrowLeft, MoreVertical, Edit3 } from 'lucide-react';
+import { Calendar, Clock, MapPin, User, Sparkles, Loader2, Plus, ArrowLeft, MoreVertical, Edit3, Filter } from 'lucide-react';
 
 interface ConferencesProps {
   sessions: Session[];
@@ -29,6 +29,9 @@ const Conferences: React.FC<ConferencesProps> = ({ sessions, onSetSessions, role
   const [selectedConf, setSelectedConf] = useState<Conference | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'speakers'>('overview');
   
+  // Filter State
+  const [selectedTrack, setSelectedTrack] = useState<string>('All');
+
   // Schedule Logic
   const [loading, setLoading] = useState(false);
   const [params, setParams] = useState<ScheduleGenerationParams>({
@@ -48,12 +51,21 @@ const Conferences: React.FC<ConferencesProps> = ({ sessions, onSetSessions, role
     try {
       const newSessions = await generateSchedule(params);
       onSetSessions(newSessions);
+      setSelectedTrack('All'); // Reset filter on new generation
     } catch (e) {
       alert("Error generating schedule. Ensure API KEY is valid.");
     } finally {
       setLoading(false);
     }
   };
+
+  // Filter Logic
+  const uniqueTracks = ['All', ...Array.from(new Set(sessions.map(s => s.track))).sort()];
+  
+  const filteredSessions = sessions.filter(s => {
+      if (selectedTrack === 'All') return true;
+      return s.track === selectedTrack;
+  });
 
   if (view === 'list') {
     return (
@@ -217,6 +229,34 @@ const Conferences: React.FC<ConferencesProps> = ({ sessions, onSetSessions, role
             </div>
           )}
 
+          {sessions.length > 0 && (
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                        <Clock size={18} />
+                    </div>
+                    <div>
+                        <h3 className="font-semibold text-slate-900">Agenda</h3>
+                        <p className="text-xs text-slate-500">{filteredSessions.length} sessions found</p>
+                    </div>
+                </div>
+                
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Filter size={16} className="text-slate-400" />
+                    <span className="text-sm text-slate-500 whitespace-nowrap">Filter by Track:</span>
+                    <select
+                        value={selectedTrack}
+                        onChange={(e) => setSelectedTrack(e.target.value)}
+                        className="w-full sm:w-auto px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                        {uniqueTracks.map(track => (
+                            <option key={track} value={track}>{track === 'All' ? 'All Tracks' : track}</option>
+                        ))}
+                    </select>
+                </div>
+             </div>
+          )}
+
           {sessions.length === 0 ? (
             <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
               <Calendar className="mx-auto text-slate-300 w-12 h-12 mb-4" />
@@ -226,38 +266,56 @@ const Conferences: React.FC<ConferencesProps> = ({ sessions, onSetSessions, role
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {sessions.map((session) => (
-                <div key={session.id} className="bg-white p-5 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow group">
-                  <div className="flex justify-between items-start mb-3">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-                      {session.track}
-                    </span>
-                    <span className="text-xs font-mono text-slate-400">{session.time}</span>
-                  </div>
-                  
-                  <h4 className="text-md font-bold text-slate-900 mb-2 group-hover:text-indigo-600 transition-colors">
-                    {session.title}
-                  </h4>
-                  
-                  <div className="space-y-1.5 text-sm text-slate-500">
-                    <div className="flex items-center gap-2">
-                      <User size={14} className="text-slate-400" />
-                      <span>{session.speaker}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <MapPin size={14} className="text-slate-400" />
-                      <span>{session.room}</span>
-                    </div>
-                  </div>
+            <div className="space-y-4">
+              {filteredSessions.map((session) => (
+                <div key={session.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow flex flex-col md:flex-row gap-6 group">
+                   {/* Time Column */}
+                   <div className="md:w-40 flex-shrink-0 flex flex-row md:flex-col items-center md:items-start gap-2 text-slate-500 border-b md:border-b-0 md:border-r border-slate-100 pb-4 md:pb-0 md:pr-4">
+                        <div className="font-mono text-lg font-semibold text-slate-900">{session.time.split('-')[0]}</div>
+                        {session.time.includes('-') && (
+                            <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
+                                To {session.time.split('-')[1]}
+                            </div>
+                        )}
+                        {!session.time.includes('-') && (
+                             <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">{session.time}</div>
+                        )}
+                   </div>
+                   
+                   {/* Content */}
+                   <div className="flex-1 space-y-3">
+                       <div className="flex flex-wrap gap-2 items-center justify-between">
+                           <h4 className="text-xl font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{session.title}</h4>
+                           <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
+                               {session.track}
+                           </span>
+                       </div>
+                       
+                       {session.description && (
+                           <p className="text-slate-600 text-sm leading-relaxed">
+                               {session.description}
+                           </p>
+                       )}
 
-                  {session.description && (
-                    <div className="mt-3 pt-3 border-t border-slate-50 text-xs text-slate-500 line-clamp-2">
-                      {session.description}
-                    </div>
-                  )}
+                       <div className="flex flex-wrap gap-4 pt-3">
+                           <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                               <User size={16} className="text-indigo-500" />
+                               <span className="font-medium">{session.speaker}</span>
+                           </div>
+                           <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+                               <MapPin size={16} className="text-indigo-500" />
+                               <span>{session.room}</span>
+                           </div>
+                       </div>
+                   </div>
                 </div>
               ))}
+              
+              {filteredSessions.length === 0 && (
+                  <div className="text-center py-12 text-slate-400">
+                      <p>No sessions found for the selected track.</p>
+                  </div>
+              )}
             </div>
           )}
         </div>
